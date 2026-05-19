@@ -9,6 +9,7 @@ import { ServerConfig } from "../config/TransportConfig.js";
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
 import { ListEventsHandler } from "../handlers/core/ListEventsHandler.js";
 import { SearchEventsHandler } from "../handlers/core/SearchEventsHandler.js";
+import { SearchEventsFlexibleHandler } from "../handlers/core/SearchEventsFlexibleHandler.js";
 import { GetEventHandler } from "../handlers/core/GetEventHandler.js";
 import { ListColorsHandler } from "../handlers/core/ListColorsHandler.js";
 import { CreateEventHandler } from "../handlers/core/CreateEventHandler.js";
@@ -316,6 +317,32 @@ export const ToolSchemas = {
       )
   }),
   
+  'search-events-flexible': z.object({
+    account: multiAccountSchema,
+    calendarId: z.union([
+      z.string(),
+      z.array(z.string())
+    ]).describe("Calendar identifier(s) to search. Accepts calendar IDs or names."),
+    pattern: z.string().describe(
+      "Substring or regex pattern to match against event summary, description, and location. " +
+      "Unlike search-events, this uses client-side matching so partial words and partial word forms work (e.g. 'Захар' matches 'Захара')."
+    ),
+    useRegex: z.boolean().optional().describe("Treat pattern as a regular expression (default: false)."),
+    caseSensitive: z.boolean().optional().describe("Case-sensitive matching (default: false)."),
+    timeMin: z.string()
+      .refine(isValidIsoDateTime, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
+      .optional()
+      .describe("Start of time range (ISO 8601). If omitted, searches from now."),
+    timeMax: z.string()
+      .refine(isValidIsoDateTime, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
+      .optional()
+      .describe("End of time range (ISO 8601). If omitted, searches up to 1 year ahead."),
+    timeZone: timeZoneSchema,
+    fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
+      "Additional fields to include beyond defaults."
+    ),
+  }),
+
   'get-event': z.object({
     account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
@@ -756,6 +783,7 @@ export type ToolInputs = {
 export type ListCalendarsInput = ToolInputs['list-calendars'];
 export type ListEventsInput = ToolInputs['list-events'];
 export type SearchEventsInput = ToolInputs['search-events'];
+export type SearchEventsFlexibleInput = ToolInputs['search-events-flexible'];
 export type GetEventInput = ToolInputs['get-event'];
 export type ListColorsInput = ToolInputs['list-colors'];
 export type CreateEventInput = ToolInputs['create-event'];
@@ -907,6 +935,14 @@ export class ToolRegistry {
       annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['search-events'],
       handler: SearchEventsHandler
+    },
+    {
+      name: "search-events-flexible",
+      title: "Search Calendar Events (Flexible)",
+      description: "Search for events using client-side substring or regex matching against summary, description, and location. Unlike search-events, handles partial words and inflected word forms common in languages with grammatical cases. Fetches all events in the time range and filters locally.",
+      annotations: READ_ONLY_ANNOTATIONS,
+      schema: ToolSchemas['search-events-flexible'],
+      handler: SearchEventsFlexibleHandler
     },
     {
       name: "get-event",
